@@ -121,15 +121,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -263,15 +255,13 @@ public class StandardFlowSynchronizer implements FlowSynchronizer {
             if (backupAndPurge) {
                 logger.warn("Proposed flow cannot be directly inherited. However, all data that is queued in this instance is queued in a connection that exists in the Proposed flow. As a " +
                     "result, the existing flow will be backed up and replaced with the proposed flow.");
-                final File backupFile = getFlowBackupFile();
 
                 try {
-                    flowService.copyCurrentFlow(backupFile);
-                } catch (final IOException ioe) {
-                    throw new UninheritableFlowException("Could not inherit flow because failed to make a backup of existing flow to " + backupFile.getAbsolutePath(), ioe);
+                    flowService.backupCurrentFlow(Calendar.getInstance());
+                } catch (final Exception ioe) {
+                    throw new UninheritableFlowException("Could not inherit flow because failed to make a backup of existing flow ", ioe);
                 }
 
-                logger.info("Successfully created backup of existing flow to {}. Will now purge local flow and inherit proposed flow", backupFile.getAbsolutePath());
                 controller.purge();
             }
 
@@ -307,21 +297,7 @@ public class StandardFlowSynchronizer implements FlowSynchronizer {
         }
     }
 
-    private File getFlowBackupFile() {
-        final File flowConfigurationFile = nifiProperties.getFlowConfigurationFile();
-        final String baseFilename = StringUtils.substringBeforeLast(flowConfigurationFile.getName(), ".xml.gz");
-        final DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss");
-        final String timestamp = dateFormat.format(new Date());
-        final String backupFilename = baseFilename + "-" + timestamp + ".xml.gz";
-        final File backupFile = new File(flowConfigurationFile.getParentFile(), backupFilename);
 
-        if (!backupFile.getParentFile().exists() && !backupFile.getParentFile().mkdirs()) {
-            throw new UninheritableFlowException("Failed to backup existing flow because the configured directory for flow.xml.gz <" + backupFile.getParentFile().getAbsolutePath()
-                + "> does not exist and could not be created");
-        }
-
-        return backupFile;
-    }
 
     private DataFlow getExistingDataFlow(final FlowController controller) {
         final FlowManager flowManager = controller.getFlowManager();

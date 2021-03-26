@@ -817,8 +817,7 @@ public class ControllerFacade implements Authorizable {
      */
     public void save() throws NiFiCoreException {
         // save the flow controller
-        final long writeDelaySeconds = FormatUtils.getTimeDuration(properties.getFlowServiceWriteDelay(), TimeUnit.SECONDS);
-        flowService.saveFlowChanges(TimeUnit.SECONDS, writeDelaySeconds);
+        flowService.saveFlowChangesAsync();
     }
 
     /**

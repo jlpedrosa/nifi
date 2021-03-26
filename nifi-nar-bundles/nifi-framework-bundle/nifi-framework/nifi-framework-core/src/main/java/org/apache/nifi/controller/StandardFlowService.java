@@ -91,6 +91,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
@@ -241,7 +243,12 @@ public class StandardFlowService implements FlowService, ProtocolHandler {
     }
 
     @Override
-    public void saveFlowChanges() throws IOException {
+    public void saveFlowChangesAsync ()  {
+        final long writeDelaySeconds = FormatUtils.getTimeDuration(nifiProperties.getFlowServiceWriteDelay(), TimeUnit.SECONDS);
+        saveFlowChanges(TimeUnit.SECONDS, writeDelaySeconds);
+    }
+
+    private void saveFlowChangesNow() throws IOException {
         writeLock.lock();
         try {
             dao.save(controller);
@@ -250,13 +257,11 @@ public class StandardFlowService implements FlowService, ProtocolHandler {
         }
     }
 
-    @Override
-    public void saveFlowChanges(final TimeUnit delayUnit, final long delay) {
+    private void saveFlowChanges(final TimeUnit delayUnit, final long delay) {
         final boolean archiveEnabled = nifiProperties.isFlowConfigurationArchiveEnabled();
         saveFlowChanges(delayUnit, delay, archiveEnabled);
     }
 
-    @Override
     public void saveFlowChanges(final TimeUnit delayUnit, final long delay, final boolean archive) {
         final Calendar saveTime = Calendar.getInstance();
         final long delayInMs = TimeUnit.MILLISECONDS.convert(delay, delayUnit);
@@ -668,7 +673,7 @@ public class StandardFlowService implements FlowService, ProtocolHandler {
             clusterCoordinator.resetNodeStatuses(connectionResponse.getNodeConnectionStatuses().stream()
                     .collect(Collectors.toMap(NodeConnectionStatus::getNodeIdentifier, status -> status)));
             // reconnected, this node needs to explicitly write the inherited flow to disk, and resume heartbeats
-            saveFlowChanges();
+            saveFlowChangesNow();
             controller.onClusterConnect();
 
             logger.info("Node reconnected.");
@@ -1067,7 +1072,7 @@ public class StandardFlowService implements FlowService, ProtocolHandler {
         }
     }
 
-    @Override
+
     public void copyCurrentFlow(final OutputStream os) throws IOException {
         readLock.lock();
         try {
@@ -1085,11 +1090,27 @@ public class StandardFlowService implements FlowService, ProtocolHandler {
     }
 
     @Override
-    public void copyCurrentFlow(final File file) throws IOException {
+    public void backupCurrentFlow(final Calendar timestamp) throws IOException {
+        File file = getFlowBackupFile();
         try (final OutputStream fos = new FileOutputStream(file);
              final OutputStream gzipOut = new GZIPOutputStream(fos, 1)) {
             copyCurrentFlow(gzipOut);
         }
+        logger.info("Successfully created backup of existing flow to {}. Will now purge local flow and inherit proposed flow", file.getAbsolutePath());
+    }
+    private File getFlowBackupFile() {
+        final File flowConfigurationFile = nifiProperties.getFlowConfigurationFile();
+        final String baseFilename = StringUtils.substringBeforeLast(flowConfigurationFile.getName(), ".xml.gz");
+        final DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd-HH-mm-ss");
+        final String timestamp = dateFormat.format(new Date());
+        final String backupFilename = baseFilename + "-" + timestamp + ".xml.gz";
+        final File backupFile = new File(flowConfigurationFile.getParentFile(), backupFilename);
+
+        if (!backupFile.getParentFile().exists() && !backupFile.getParentFile().mkdirs()) {
+            throw new UninheritableFlowException("Failed to backup existing flow because the configured directory for flow.xml.gz <" + backupFile.getParentFile().getAbsolutePath()
+                    + "> does not exist and could not be created");
+        }
+        return backupFile;
     }
 
     public void loadSnippets(final byte[] bytes) {

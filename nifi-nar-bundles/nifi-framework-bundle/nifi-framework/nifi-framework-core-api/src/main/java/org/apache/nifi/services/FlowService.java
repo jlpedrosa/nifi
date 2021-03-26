@@ -19,10 +19,10 @@ package org.apache.nifi.services;
 import org.apache.nifi.cluster.protocol.DataFlow;
 import org.apache.nifi.lifecycle.LifeCycle;
 
-import java.io.File;
+
 import java.io.IOException;
-import java.io.OutputStream;
-import java.util.concurrent.TimeUnit;
+import java.util.Calendar;
+
 
 /**
  * Defines the API level services available for carrying out file-based dataflow operations.
@@ -30,32 +30,13 @@ import java.util.concurrent.TimeUnit;
  */
 public interface FlowService extends LifeCycle {
 
-    /**
-     * Immediately persists the state of the flow controller to the flow.xml file in a blocking call.
-     *
-     * @throws NullPointerException if the given flow is null.
-     * @throws IOException if any problem occurs creating/modifying file
-     */
-    void saveFlowChanges() throws IOException;
 
     /**
      * Asynchronously saves the flow controller. The flow controller will be copied and immediately returned. If another call to save is made within that time the latest called state of the flow
      * controller will be used. In database terms this technique is referred to as 'write-delay'.
      *
-     * @param delayUnit unit of delay
-     * @param delay period of delay
      */
-    void saveFlowChanges(TimeUnit delayUnit, long delay);
-
-    /**
-     * Asynchronously saves the flow controller. The flow controller will be copied and immediately returned. If another call to save is made within that time the latest called state of the flow
-     * controller will be used. In database terms this technique is referred to as 'write-delay'.
-     *
-     * @param delayUnit unit of delay
-     * @param delay period of delay
-     * @param archive if true means the user wants the flow configuration to be archived as well
-     */
-    void saveFlowChanges(TimeUnit delayUnit, long delay, boolean archive);
+    void saveFlowChangesAsync();
 
     /**
      * Stops the flow and underlying repository as determined by user
@@ -78,19 +59,12 @@ public interface FlowService extends LifeCycle {
     void load(DataFlow proposedFlow) throws IOException;
 
     /**
-     * Copies the contents of the current flow.xml to the given OutputStream
+     * Backus the contents of the current flow with a  given timestamp, overwriting the backup if it exists
      *
-     * @param os an output stream
-     * @throws IOException if unable to load the flow
-     */
-    void copyCurrentFlow(OutputStream os) throws IOException;
-
-    /**
-     * Copies the contents of the current flow.xml.gz to the given file, overwriting the file if it exists
-     * @param file the file to write the current flow to
+     * @param timestamp the file to write the current flow to
      * @throws IOException if unable to read the current flow or unable to write to the given file
      */
-    void copyCurrentFlow(File file) throws IOException;
+    void backupCurrentFlow(Calendar timestamp) throws IOException;
 
     /**
      * Creates a DataFlow object by first looking for a flow on from disk, and falling back to the controller's flow otherwise.
